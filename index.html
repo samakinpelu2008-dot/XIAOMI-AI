@@ -3,28 +3,33 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>T COINS Trading Simulator</title>
+<title>T COINS Mobile Simulator</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
-  body { display: flex; flex-direction: column; height: 100vh; }
+  body { display: flex; flex-direction: column; height: 100vh; background: #111; color: #fff; }
+  
+  /* Top graph container */
   #graph-container { height: 40%; background: #111; position: relative; }
-  #coin-cards { height: 60%; overflow-y: auto; background: #222; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
-  .coin-card { background: #333; padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-  .coin-name { font-weight: bold; color: #fff; }
-  .coin-change { font-weight: bold; }
+  canvas#coinGraph { width: 100%; height: 100%; display: block; }
+
+  /* Bottom scrollable coin cards */
+  #coin-cards { height: 60%; overflow-y: auto; padding: 5px; display: flex; flex-direction: column; gap: 5px; }
+  .coin-card { background: #222; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; cursor: pointer; height: 50px; }
+  .coin-name { font-weight: bold; font-size: 14px; }
+  .coin-change { font-weight: bold; font-size: 13px; min-width: 50px; text-align: right; }
   .up { color: #0f0; }
   .down { color: #f00; }
-  canvas { width: 100%; height: 100%; display: block; }
+  .mini-graph { width: 60px; height: 30px; background: #111; }
 </style>
 </head>
 <body>
 
-<!-- Top Graph -->
+<!-- Top graph -->
 <div id="graph-container">
   <canvas id="coinGraph"></canvas>
 </div>
 
-<!-- Coin Cards -->
+<!-- Scrollable coin cards -->
 <div id="coin-cards"></div>
 
 <script>
@@ -42,69 +47,97 @@ const coins = [
 ];
 
 let selectedCoin = coins[0];
-
-// Coin Prices (simulate movement)
 let coinData = {};
+
+// Initialize coin price history (50 points)
 coins.forEach(c => {
-  coinData[c.name] = Array.from({length: 50}, () => 100 + Math.random()*20 - 10);
+  coinData[c.name] = Array.from({length:50}, () => 100 + Math.random()*4 - 2); // small fluctuations
 });
 
-// Render Coin Cards
+// Coin cards container
 const cardContainer = document.getElementById("coin-cards");
+
+// Render coin cards
 function renderCards() {
   cardContainer.innerHTML = "";
   coins.forEach(c => {
-    const change = ((coinData[c.name].slice(-1)[0] - coinData[c.name].slice(-2)[0]) || 0).toFixed(2);
-    const upDown = change >= 0 ? "up" : "down";
     const card = document.createElement("div");
     card.className = "coin-card";
-    card.innerHTML = `
-      <span class="coin-name">${c.name}</span>
-      <span class="coin-change ${upDown}">${change}%</span>
-    `;
+
+    // Calculate change %
+    const data = coinData[c.name];
+    const change = ((data[data.length-1] - data[data.length-2])/data[data.length-2]*100).toFixed(2);
+    const upDown = change >= 0 ? "up" : "down";
+
+    // Mini graph canvas
+    const miniCanvas = document.createElement("canvas");
+    miniCanvas.className = "mini-graph";
+    miniCanvas.width = 60;
+    miniCanvas.height = 30;
+    const ctxMini = miniCanvas.getContext("2d");
+    ctxMini.clearRect(0,0,miniCanvas.width, miniCanvas.height);
+    ctxMini.beginPath();
+    const step = miniCanvas.width/(data.length-1);
+    data.forEach((p,i)=>{
+      const y = miniCanvas.height - ((p-95)/10 * miniCanvas.height);
+      const x = i*step;
+      if(i===0) ctxMini.moveTo(x,y); else ctxMini.lineTo(x,y);
+    });
+    ctxMini.strokeStyle = c.color;
+    ctxMini.lineWidth = 1;
+    ctxMini.stroke();
+
+    card.innerHTML = `<span class="coin-name">${c.name}</span>
+                      <span class="coin-change ${upDown}">${change}%</span>`;
+    card.appendChild(miniCanvas);
+
     card.onclick = () => { selectedCoin = c; };
+
     cardContainer.appendChild(card);
   });
 }
 
-// Graph Setup
+// Top graph
 const canvas = document.getElementById("coinGraph");
 const ctx = canvas.getContext("2d");
 
 function drawGraph() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.beginPath();
   const data = coinData[selectedCoin.name];
-  const step = canvas.width / (data.length - 1);
-  data.forEach((p, i) => {
-    const y = canvas.height - ((p - 80) / 40 * canvas.height);
-    const x = i * step;
-    if(i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+  ctx.beginPath();
+  const step = canvas.width / (data.length-1);
+  data.forEach((p,i)=>{
+    const y = canvas.height - ((p-95)/10 * canvas.height);
+    const x = i*step;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
   });
   ctx.strokeStyle = selectedCoin.color;
   ctx.lineWidth = 2;
   ctx.stroke();
 }
 
-// Simulate live data movement
+// Smoothly update data (small realistic changes)
 function updateData() {
   coins.forEach(c => {
-    let last = coinData[c.name].slice(-1)[0];
-    let change = (Math.random() - 0.5) * 2; // ±1% move
+    const last = coinData[c.name][coinData[c.name].length-1];
+    const change = (Math.random() - 0.5) * 0.5; // subtle ±0.25%
     let newVal = last + change;
     coinData[c.name].push(newVal);
     if(coinData[c.name].length > 50) coinData[c.name].shift();
   });
   renderCards();
-  drawGraph();
 }
 
-setInterval(updateData, 500); // update every 0.5s
+// Animate top graph
+function animate() {
+  updateData();
+  drawGraph();
+  requestAnimationFrame(animate);
+}
 
 // Initial render
 renderCards();
-drawGraph();
+animate();
 </script>
 </body>
 </html>
