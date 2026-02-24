@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <title>Professional Chess</title>
+
+<!-- Chessboard CSS -->
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard.min.css"/>
+
 <style>
 body{
   margin:0;
@@ -12,7 +17,7 @@ body{
   align-items:center;
   justify-content:center;
   height:100vh;
-  font-family:Segoe UI, sans-serif;
+  font-family:Segoe UI;
 }
 
 h2{
@@ -20,127 +25,82 @@ h2{
   margin-bottom:10px;
 }
 
-.board{
+#board{
   width:640px;
-  height:640px;
-  display:grid;
-  grid-template-columns:repeat(8,1fr);
-  grid-template-rows:repeat(8,1fr);
-  box-shadow:0 10px 30px rgba(0,0,0,0.6);
-  border-radius:8px;
-  overflow:hidden;
 }
 
-.square{
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  font-size:48px;
-  cursor:pointer;
-  transition:background 0.2s;
-}
-
-.light{ background:#f0d9b5; }
-.dark{ background:#b58863; }
-
-.square:hover{
-  filter:brightness(1.1);
-}
-
-.selected{
-  outline:4px solid #ff4444;
-}
-
-.info{
+#status{
+  margin-top:10px;
   color:white;
-  margin-bottom:10px;
-  font-size:18px;
   font-weight:bold;
 }
 </style>
 </head>
 <body>
 
-<div class="info" id="info">Turn: White</div>
-<div class="board" id="board"></div>
+<h2>Professional Chess</h2>
+<div id="board"></div>
+<div id="status"></div>
+
+<!-- Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.13.4/chess.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard.min.js"></script>
 
 <script>
-const board = document.getElementById("board");
-const info = document.getElementById("info");
+var board = null
+var game = new Chess()
+var statusEl = document.getElementById('status')
 
-let selected = null;
-let turn = "white";
+function updateStatus() {
+  var moveColor = 'White'
+  if (game.turn() === 'b') {
+    moveColor = 'Black'
+  }
 
-const pieces = {
-  r:"♜", n:"♞", b:"♝", q:"♛", k:"♚", p:"♟",
-  R:"♖", N:"♘", B:"♗", Q:"♕", K:"♔", P:"♙"
-};
-
-let game = [
-["r","n","b","q","k","b","n","r"],
-["p","p","p","p","p","p","p","p"],
-["","","","","","","",""],
-["","","","","","","",""],
-["","","","","","","",""],
-["","","","","","","",""],
-["P","P","P","P","P","P","P","P"],
-["R","N","B","Q","K","B","N","R"]
-];
-
-function draw(){
-  board.innerHTML="";
-  for(let r=0;r<8;r++){
-    for(let c=0;c<8;c++){
-      const square = document.createElement("div");
-      square.classList.add("square");
-      square.classList.add((r+c)%2==0?"light":"dark");
-      square.dataset.row=r;
-      square.dataset.col=c;
-
-      if(game[r][c]!=""){
-        square.textContent = pieces[game[r][c]];
-      }
-
-      square.onclick=()=>clickSquare(r,c,square);
-      board.appendChild(square);
+  if (game.in_checkmate()) {
+    statusEl.innerHTML = 'Game over, ' + moveColor + ' is in checkmate.'
+  } else if (game.in_draw()) {
+    statusEl.innerHTML = 'Game over, drawn position'
+  } else {
+    statusEl.innerHTML = moveColor + ' to move'
+    if (game.in_check()) {
+      statusEl.innerHTML += ', ' + moveColor + ' is in check'
     }
   }
 }
 
-function clickSquare(r,c,square){
-  const piece = game[r][c];
-
-  if(selected){
-    movePiece(selected.r,selected.c,r,c);
-    selected=null;
-    draw();
-    return;
-  }
-
-  if(piece!="" && isCorrectTurn(piece)){
-    selected={r,c};
-    square.classList.add("selected");
+function onDragStart(source, piece) {
+  if (game.game_over()) return false
+  if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+      (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+    return false
   }
 }
 
-function isCorrectTurn(piece){
-  if(turn==="white") return piece===piece.toUpperCase();
-  return piece===piece.toLowerCase();
+function onDrop(source, target) {
+  var move = game.move({
+    from: source,
+    to: target,
+    promotion: 'q'
+  })
+
+  if (move === null) return 'snapback'
+  updateStatus()
 }
 
-function movePiece(r1,c1,r2,c2){
-  const piece = game[r1][c1];
-  if(!piece) return;
-
-  // Basic movement (no strict validation yet)
-  game[r2][c2]=piece;
-  game[r1][c1]="";
-
-  turn = turn==="white"?"black":"white";
-  info.textContent="Turn: "+turn.charAt(0).toUpperCase()+turn.slice(1);
+function onSnapEnd() {
+  board.position(game.fen())
 }
 
-draw();
+board = Chessboard('board', {
+  draggable: true,
+  position: 'start',
+  onDragStart: onDragStart,
+  onDrop: onDrop,
+  onSnapEnd: onSnapEnd
+})
+
+updateStatus()
 </script>
 
 </body>
