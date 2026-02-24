@@ -1,135 +1,85 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Xiaomi AI</title>
-
+<meta charset="UTF-8">
+<title>Simple Ludo Game</title>
 <style>
-body{
-  background:#0f0f0f;
-  color:white;
-  font-family:Arial;
-  text-align:center;
-  padding:20px;
-}
-
-#chat{
-  height:300px;
-  overflow-y:auto;
-  border:1px solid #333;
-  padding:10px;
-  margin-bottom:10px;
-  border-radius:10px;
-}
-
-input{
-  width:70%;
-  padding:10px;
-  border-radius:20px;
-  border:none;
-}
-
-button{
-  padding:10px 15px;
-  border:none;
-  border-radius:20px;
-  background:#00ffcc;
-  cursor:pointer;
-}
+  body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; margin-top: 20px; }
+  #board { display: grid; grid-template-columns: repeat(15, 30px); grid-template-rows: repeat(15, 30px); gap: 2px; }
+  .cell { width: 30px; height: 30px; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center; }
+  .red { background-color: #f88; }
+  .blue { background-color: #88f; }
+  .player { font-weight: bold; color: #000; }
+  #dice { margin: 10px; padding: 10px 20px; font-size: 16px; cursor: pointer; }
+  #info { margin-top: 10px; }
 </style>
 </head>
-
 <body>
 
-<h2>Xiaomi AI Assistant</h2>
-
-<div id="chat"></div>
-
-<input id="input" placeholder="Say something..." />
-<button onclick="send()">Send</button>
-<button onclick="startVoice()">🎤</button>
+<h1>Simple Ludo Game (2 Players)</h1>
+<div id="board"></div>
+<button id="dice">Roll Dice</button>
+<div id="info">Player Red's turn</div>
 
 <script>
-const apiKey = "PASTE_YOUR_OPENAI_API_KEY_HERE";
+const board = document.getElementById('board');
+const info = document.getElementById('info');
+const dice = document.getElementById('dice');
 
-async function send(){
-  const input = document.getElementById("input");
-  const message = input.value;
-  if(!message) return;
+const size = 15; // 15x15 board
+let cells = [];
+let players = {
+  red: { pos: -1, color: 'red' },
+  blue: { pos: -1, color: 'blue' }
+};
+let turn = 'red';
 
-  addMessage("You: " + message);
-
-  input.value = "";
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + apiKey
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: "You are Xiaomi AI assistant. Respond clearly and smart." },
-        { role: "user", content: message }
-      ]
-    })
-  });
-
-  const data = await response.json();
-  const reply = data.choices[0].message.content;
-
-  addMessage("Xiaomi: " + reply);
-  speak(reply);
+// Initialize board
+for (let i = 0; i < size*size; i++) {
+  const cell = document.createElement('div');
+  cell.classList.add('cell');
+  board.appendChild(cell);
+  cells.push(cell);
 }
 
-function addMessage(text){
-  const chat = document.getElementById("chat");
-  chat.innerHTML += "<p>" + text + "</p>";
-  chat.scrollTop = chat.scrollHeight;
-}
+// Simple path (around the edge)
+const path = [];
+for(let i=0;i<size;i++) path.push(i); // top row
+for(let i=size;i<size*size;i+=size) path.push(i+size-1); // right column
+for(let i=size*size-1;i>=size*size-size;i--) path.push(i); // bottom row
+for(let i=size*size-size-1;i>=0;i-=size) path.push(i); // left column
 
-function startVoice(){
-  const recognition = new(window.SpeechRecognition || window.webkitSpeechRecognition)();
-  recognition.onresult = function(event){
-    const transcript = event.results[0][0].transcript;
-    if(transcript.toLowerCase().includes("hey xiaomi")){
-      sendVoice(transcript);
+function updateBoard() {
+  cells.forEach(cell => cell.textContent = '');
+  for (let p in players) {
+    if (players[p].pos >= 0) {
+      cells[path[players[p].pos % path.length]].textContent = p[0].toUpperCase();
+      cells[path[players[p].pos % path.length]].classList.add(players[p].color);
     }
-  };
-  recognition.start();
+  }
 }
 
-async function sendVoice(text){
-  addMessage("You: " + text);
+dice.onclick = () => {
+  const roll = Math.floor(Math.random() * 6) + 1;
+  info.textContent = `${turn} rolled a ${roll}`;
+  let player = players[turn];
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + apiKey
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: "You are Xiaomi AI assistant." },
-        { role: "user", content: text }
-      ]
-    })
-  });
+  if (player.pos === -1 && roll === 6) player.pos = 0;
+  else if (player.pos >= 0) player.pos += roll;
 
-  const data = await response.json();
-  const reply = data.choices[0].message.content;
+  updateBoard();
 
-  addMessage("Xiaomi: " + reply);
-  speak(reply);
-}
+  if (player.pos >= path.length) {
+    info.textContent = `${turn} wins!`;
+    dice.disabled = true;
+    return;
+  }
 
-function speak(text){
-  const speech = new SpeechSynthesisUtterance(text);
-  speech.lang = "en-US";
-  speechSynthesis.speak(speech);
-}
+  if (roll !== 6) turn = turn === 'red' ? 'blue' : 'red';
+  info.textContent += ` | Next: ${turn}`;
+};
+
+updateBoard();
 </script>
 
 </body>
